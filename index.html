@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
-<title>Control de Dinero Personal</title>
+<title>My Cash</title>
 
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#10141a">
@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Mi Dinero">
+<meta name="apple-mobile-web-app-title" content="My Cash">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
@@ -1100,44 +1100,82 @@
     }catch(e){}
   }
 
-  function procesarEntradaDesdeAtajo(){
-    const params = new URLSearchParams(window.location.search);
-    if(!params.has('tipo') && !params.has('monto') && !params.has('motivo')) return;
+  // ---------- RESPUESTA HACIA EL ATAJO (postMessage) ----------
+  // Intenta avisar a la ventana que abrió esta página (si la hay) con un
+  // mensaje JSON simple. Si no hay window.opener (lo más común cuando un
+  // Atajo usa "Abrir URLs"), simplemente no hace nada: la PWA sigue
+  // funcionando normalmente y el aviso se ve igual mediante el toast.
+  function responderAAtajo(texto, ok, extra, destino){
+    if(ok === undefined) ok = true;
+    const ventana = destino || window.opener;
+    if(!ventana || typeof ventana.postMessage !== 'function') return false;
+    const payload = Object.assign({
+      source: 'control-dinero',
+      type: 'shortcut-response',
+      ok: ok,
+      text: texto
+    }, extra || {});
+    try{ ventana.postMessage(payload, '*'); return true; }catch(e){ return false; }
+  }
 
-    const tipoRaw = (params.get('tipo') || '').trim().toLowerCase();
-    const motivo = (params.get('motivo') || '').trim();
-    let montoRaw = (params.get('monto') || '').trim();
-    montoRaw = montoRaw.replace(',', '.').replace(/[^0-9.\-]/g, '');
-    const monto = parseFloat(montoRaw);
+  // ---------- NORMALIZACIÓN DE ACCIONES ----------
+  // Acepta tanto los nombres en español usados por parámetros de URL
+  // (registrar / saldo / gastos) como los nombres en inglés usados por el
+  // listener de postMessage (register / balance / expenses).
+  function normalizarAccion(accionRaw){
+    const a = String(accionRaw || '').trim().toLowerCase();
+    if(a === 'registrar' || a === 'register') return 'registrar';
+    if(a === 'saldo' || a === 'balance') return 'saldo';
+    if(a === 'gastos' || a === 'expenses') return 'gastos';
+    return null;
+  }
 
+  // ---------- COMANDO: REGISTRAR (gasto o ingreso) ----------
+  // Contiene exactamente la misma lógica y validaciones que ya existían en
+  // procesarEntradaDesdeAtajo(): valida tipo y monto, respeta días cerrados
+  // y fechas futuras, crea el movimiento con la estructura actual, guarda
+  // con guardar() y refresca la interfaz con renderAll().
+  function ejecutarComandoRegistrar(comando){
+    const tipoRaw = String((comando && comando.tipo) || '').trim().toLowerCase();
     const tipo = tipoRaw === 'ingreso' ? 'ingreso' : (tipoRaw === 'gasto' ? 'gasto' : null);
+    const motivo = String((comando && comando.motivo) || '').trim();
+
+    let monto;
+    const montoEntrada = comando && comando.monto;
+    if(typeof montoEntrada === 'number'){
+      monto = montoEntrada;
+    }else{
+      let montoRaw = String(montoEntrada || '').trim().replace(',', '.').replace(/[^0-9.\-]/g, '');
+      monto = parseFloat(montoRaw);
+    }
 
     if(!tipo){
-      mostrarToastSiri(false, 'No se registró el movimiento: el Atajo debe enviar "tipo=ingreso" o "tipo=gasto".');
-      limpiarParametrosUrl();
-      return;
+      const texto = 'No se registró el movimiento: "tipo" debe ser "ingreso" o "gasto".';
+      mostrarToastSiri(false, texto);
+      return { ok:false, action:'registrar', text: texto };
     }
     if(!monto || !isFinite(monto) || monto <= 0){
-      mostrarToastSiri(false, 'No se registró el movimiento: el "monto" enviado desde el Atajo no es un número válido mayor a 0.');
-      limpiarParametrosUrl();
-      return;
+      const texto = 'No se registró el movimiento: "monto" debe ser un número mayor a 0.';
+      mostrarToastSiri(false, texto);
+      return { ok:false, action:'registrar', tipo: tipo, text: texto };
     }
 
     const idx = encontrarDiaDeHoy();
     if(idx === -1){
-      mostrarToastSiri(false, 'No se pudo registrar: la fecha de hoy no corresponde a ningún día disponible todavía.');
-      limpiarParametrosUrl();
-      return;
+      const texto = 'No se pudo registrar: la fecha de hoy no corresponde a ningún día disponible todavía.';
+      mostrarToastSiri(false, texto);
+      return { ok:false, action:'registrar', tipo: tipo, text: texto };
     }
 
     const dia = estado.semana.dias[idx];
 
-    // Seguridad: no se permiten fechas futuras (siempre se usa la fecha/hora del dispositivo)
-    // y se respetan los días ya cerrados: si el día de hoy está cerrado, no se sobreescribe.
+    // Seguridad: no se permiten fechas futuras (siempre se usa la fecha/hora del
+    // dispositivo) y se respetan los días ya cerrados: si el día de hoy está
+    // cerrado, no se sobreescribe.
     if(dia.realizado){
-      mostrarToastSiri(false, 'Hoy ('+dia.dia+') ya está marcado como día cerrado en la app. Reábrelo para poder registrar este movimiento.');
-      limpiarParametrosUrl();
-      return;
+      const texto = 'Hoy ('+dia.dia+') ya está marcado como día cerrado en la app. Reábrelo para poder registrar este movimiento.';
+      mostrarToastSiri(false, texto);
+      return { ok:false, action:'registrar', tipo: tipo, text: texto };
     }
 
     const ahora = new Date();
@@ -1152,10 +1190,121 @@
     guardar();
     renderAll();
 
-    const etiqueta = tipo === 'ingreso' ? 'Ingreso registrado' : 'Gasto registrado';
-    mostrarToastSiri(true, etiqueta + ': ' + money(monto) + (motivo ? ' — ' + motivo : '') + '.');
+    const etiqueta = tipo === 'ingreso' ? 'Ingreso' : 'Gasto';
+    const texto = etiqueta + ' de ' + money(monto) + ' registrado.';
+    mostrarToastSiri(true, texto + (motivo ? ' (' + motivo + ')' : ''));
+    return { ok:true, action:'registrar', tipo: tipo, text: texto, data: { monto: monto, tipo: tipo } };
+  }
+
+  // ---------- COMANDO: SALDO ----------
+  // Solo lee: no modifica ningún movimiento ni estado.
+  function ejecutarComandoSaldo(){
+    const t = calcularTotales();
+    const texto = 'Tu saldo actual es de ' + money(t.saldoActual) + '.';
+    mostrarToastSiri(true, texto);
+    return {
+      ok: true, action: 'saldo', text: texto,
+      data: {
+        saldoActual: t.saldoActual,
+        saldoProyectado: t.saldoProyectado,
+        totalIngresos: t.totalIngresos,
+        totalGastos: t.totalGastos
+      }
+    };
+  }
+
+  // ---------- COMANDO: GASTOS ----------
+  // Solo lee: usa movimientosSemana(), la misma fuente de datos que usan
+  // los gráficos y estadísticas actuales.
+  function ejecutarComandoGastos(){
+    const movs = movimientosSemana().filter(m => m.tipo === 'gasto');
+    const totalGastos = movs.reduce((s, m) => s + (Number(m.monto) || 0), 0);
+    const cantidadMovimientos = movs.length;
+    const texto = 'Esta semana llevas ' + money(totalGastos) + ' en gastos, en ' +
+      cantidadMovimientos + ' movimiento' + (cantidadMovimientos === 1 ? '' : 's') + '.';
+    mostrarToastSiri(true, texto);
+    return { ok: true, action: 'gastos', text: texto, data: { totalGastos: totalGastos, cantidadMovimientos: cantidadMovimientos } };
+  }
+
+  // ---------- FUNCIÓN CENTRAL ----------
+  // Punto único usado tanto por la URL (procesarEntradaDesdeAtajo) como por
+  // el listener de postMessage, para no tener dos implementaciones distintas
+  // de "registrar", "saldo" o "gastos".
+  function procesarComandoAtajo(comando){
+    let accion = normalizarAccion(comando && comando.action);
+    // Compatibilidad con el formato anterior: ?tipo=gasto&monto=25 (sin "action")
+    if(!accion && comando && comando.tipo) accion = 'registrar';
+
+    if(accion === 'registrar') return ejecutarComandoRegistrar(comando);
+    if(accion === 'saldo') return ejecutarComandoSaldo();
+    if(accion === 'gastos') return ejecutarComandoGastos();
+
+    const texto = 'Comando no reconocido para Atajos.';
+    mostrarToastSiri(false, texto);
+    return { ok:false, text: texto };
+  }
+
+  // ---------- ENTRADA POR URL ----------
+  // Acepta el formato original (?tipo=...&monto=...&motivo=...) y el nuevo
+  // formato explícito (?action=registrar|saldo|gastos&...).
+  function procesarEntradaDesdeAtajo(){
+    const params = new URLSearchParams(window.location.search);
+    const hayParametros = params.has('action') || params.has('tipo') || params.has('monto') || params.has('motivo');
+    if(!hayParametros) return;
+
+    const comando = {
+      action: params.get('action'),
+      tipo: params.get('tipo'),
+      monto: params.get('monto'),
+      motivo: params.get('motivo')
+    };
+
+    // 1) Procesar la orden y guardar los datos primero.
+    const resultado = procesarComandoAtajo(comando);
+
+    // 2) Preparar y enviar la respuesta al Atajo (si la ventana lo permite).
+    responderAAtajo(resultado.text, resultado.ok, {
+      action: resultado.action,
+      tipo: resultado.tipo,
+      data: resultado.data
+    });
+
+    // 3) Limpiar la URL al final, para que un refresco no repita la acción.
     limpiarParametrosUrl();
   }
+
+  // ---------- ENTRADA POR postMessage ----------
+  // Permite que una ventana/pestaña que sí conserve una referencia a esta
+  // página (por ejemplo, abierta con window.open desde otra herramienta)
+  // le pida acciones sin depender de parámetros de URL. Solo se aceptan
+  // mensajes con el "source" exacto esperado y acciones reconocidas; nunca
+  // se ejecuta nada arbitrario.
+  window.addEventListener('message', (event) => {
+    const data = event.data;
+    if(!data || typeof data !== 'object') return;
+    if(data.source !== 'control-dinero-shortcut') return;
+
+    const accionesPermitidas = { register:true, balance:true, expenses:true };
+    const accionCruda = String(data.action || '').trim().toLowerCase();
+    if(!accionesPermitidas[accionCruda]) return; // acción no reconocida: se ignora por completo
+
+    const comando = {
+      action: accionCruda,
+      tipo: data.tipo,
+      monto: data.monto,
+      motivo: data.motivo
+    };
+
+    const resultado = procesarComandoAtajo(comando);
+
+    // Responder por el mismo canal por el que llegó el mensaje y, además,
+    // intentar window.opener como respaldo.
+    responderAAtajo(resultado.text, resultado.ok, {
+      action: resultado.action,
+      tipo: resultado.tipo,
+      data: resultado.data
+    }, event.source);
+  });
 
   renderAll();
   procesarEntradaDesdeAtajo();
