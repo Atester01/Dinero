@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>Control de Dinero Personal</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#10141a">
+
+<!-- iOS: permite instalar en pantalla de inicio y controla la barra de estado -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mi Dinero">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+
+<style>
+  :root{
+    --bg: #10141a;
+    --surface: #171d26;
+    --surface-2: #1f2731;
+    --line: #2a3340;
+    --text: #e7ecf2;
+    --text-dim: #8c98a8;
+    --mint: #4fd8a0;
+    --mint-dim: #2c6b52;
+    --coral: #ff7a6e;
+    --coral-dim: #7a3a35;
+    --amber: #e8b94f;
+    --blue: #5fb3e8;
+    --purple: #b892e8;
+    --pink: #ff9ecb;
+  }
+  *{ box-sizing: border-box; }
+  html,body{
+    margin:0; padding:0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  html{ overscroll-behavior-y: contain; }
+  body{
+    padding: calc(64px + env(safe-area-inset-top)) 16px calc(48px + env(safe-area-inset-bottom));
+    max-width: 760px; margin: 0 auto;
+    overscroll-behavior-y: contain;
+  }
+  .top{
+    position: fixed; top:0; left:0; right:0; z-index: 200;
+    display:flex; align-items:center; justify-content:space-between; gap: 10px;
+    padding: calc(14px + env(safe-area-inset-top)) 16px 14px;
+    background: rgba(16,20,26,0.82);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--line);
+  }
+  .top h1{ font-size: 15px; font-weight: 600; letter-spacing: 0.02em; color: var(--text-dim); margin: 0; }
+  .mode-toggle{ display:flex; background: var(--surface); border:1px solid var(--line); border-radius: 10px; padding: 3px; }
+  .mode-toggle button{ flex:none; padding: 7px 12px; font-size: 12.5px; border: none; background: transparent; color: var(--text-dim); border-radius: 7px; }
+  .mode-toggle button.active{ background: var(--surface-2); color: var(--text); }
+
+  .hero{ background: linear-gradient(180deg, var(--surface-2), var(--surface)); border: 1px solid var(--line); border-radius: 18px; padding: 24px 20px; margin-bottom: 14px; }
+  .hero-label{ font-size: 13px; color: var(--text-dim); margin-bottom: 6px; }
+  .hero-amount{ font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; line-height: 1; }
+  .hero-amount.neg{ color: var(--coral); }
+  .hero-row{ display:flex; gap: 14px; flex-wrap:wrap; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .hero-mini{ flex:1; min-width: 130px; }
+  .hero-mini .k{ font-size: 11.5px; color: var(--text-dim); margin-bottom: 3px; }
+  .hero-mini .v{ font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .saldo-inicial-row{ margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); display:flex; align-items:center; justify-content: space-between; gap: 10px; }
+  .saldo-inicial-row label{ font-size: 13px; color: var(--text-dim); }
+  .saldo-inicial-row input{ width: 130px; text-align: right; }
+
+  .summary-grid{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+  .summary-card{ background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 12px; }
+  .summary-card .k{ font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+  .summary-card .v{ font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .summary-card.ing .v{ color: var(--mint); }
+  .summary-card.gas .v{ color: var(--coral); }
+
+  .cartera-card{ background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 26px; }
+  .cartera-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+  .cartera-row label{ font-size: 13px; color: var(--text-dim); }
+  .cartera-row input{ width: 130px; text-align:right; }
+  .cartera-resultado{ margin-top: 10px; font-size: 13px; color: var(--text-dim); }
+  .cartera-resultado b{ color: var(--text); }
+
+  section.block{ margin-bottom: 26px; }
+  .block-header{ display:flex; align-items:baseline; justify-content: space-between; margin-bottom: 10px; gap: 8px; flex-wrap: wrap; }
+  .block-header h2{ font-size: 15px; font-weight: 600; margin: 0; }
+  .block-header .hint{ font-size: 12px; color: var(--text-dim); }
+
+  .dia-card{ background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 10px; }
+  .dia-top{ display:flex; align-items:center; gap: 10px; margin-bottom: 10px; }
+  .check{ width: 22px; height: 22px; border-radius: 7px; border: 1.5px solid var(--line); background: var(--surface-2); flex-shrink: 0; cursor: pointer; display:flex; align-items:center; justify-content:center; transition: background .15s, border-color .15s; }
+  .check.on{ background: var(--mint-dim); border-color: var(--mint); }
+  .check.on::after{ content: ""; width: 10px; height: 6px; border-left: 2px solid var(--mint); border-bottom: 2px solid var(--mint); transform: rotate(-45deg) translateY(-1px); }
+  .dia-nombre{ font-size: 15px; font-weight: 600; }
+  .dia-fecha{ font-size: 11.5px; color: var(--text-dim); }
+  .dia-card.done .dia-nombre{ color: var(--text-dim); }
+  .dia-neto{ margin-left:auto; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .dia-neto.pos{ color: var(--mint); }
+  .dia-neto.neg{ color: var(--coral); }
+
+  .mov-row{ display:flex; align-items:center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); }
+  .mov-dot{ width: 9px; height: 9px; border-radius: 50%; flex-shrink:0; }
+  .mov-info{ flex:1; min-width:0; }
+  .mov-cat{ font-size: 11.5px; color: var(--text-dim); }
+  .mov-nota{ font-size: 12.5px; color: var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .mov-monto{ font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink:0; }
+  .mov-monto.ingreso{ color: var(--mint); }
+  .mov-monto.gasto{ color: var(--coral); }
+  .del-mov{ background:none; border:none; color: var(--text-dim); font-size: 16px; padding: 2px 6px; flex:none; width:auto; }
+
+  .add-mov-form{ margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .add-mov-form .full{ grid-column: 1 / -1; }
+  .field-label{ font-size: 11px; color: var(--text-dim); margin-bottom: 4px; display:block; }
+  select, input[type="number"], input[type="text"], input[type="date"]{
+    width: 100%; background: var(--surface-2); border: 1px solid var(--line); border-radius: 9px;
+    color: var(--text); padding: 9px 10px; font-size: 14px; font-family: inherit; font-variant-numeric: tabular-nums;
+  }
+  select:focus, input:focus{ outline: none; border-color: var(--mint); }
+  input::placeholder{ color: #5a6472; }
+  .btn-add-mov{ grid-column: 1/-1; background: var(--mint-dim); border-color: var(--mint); color: #d7fff0; margin-top: 2px; padding: 10px; }
+
+  .actions-row{ display:flex; gap: 10px; margin-bottom: 26px; flex-wrap: wrap; }
+  button{ font-family: inherit; font-size: 14px; font-weight: 600; border-radius: 12px; padding: 13px 16px; border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; flex: 1; min-width: 120px; }
+  button.primary{ background: var(--mint-dim); border-color: var(--mint); color: #d7fff0; }
+  button:active{ transform: scale(0.98); }
+  #inputImportar{ display:none; }
+
+  .chart-box{ background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 10px; }
+  .chart-title{ font-size: 13px; color: var(--text-dim); margin-bottom: 12px; }
+  .bar-row{ display:flex; align-items:center; gap: 8px; margin-bottom: 8px; font-size: 12.5px; }
+  .bar-cat{ width: 78px; flex-shrink:0; color: var(--text-dim); }
+  .bar-track{ flex:1; height: 12px; background: var(--surface-2); border-radius: 6px; overflow:hidden; }
+  .bar-fill{ height: 100%; border-radius: 6px; }
+  .bar-val{ width: 68px; flex-shrink:0; text-align:right; font-variant-numeric: tabular-nums; font-weight:600; }
+  .vacio-chart{ font-size: 12.5px; color: var(--text-dim); }
+
+  .stats-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat-card{ background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 13px; }
+  .stat-card .k{ font-size: 11.5px; color: var(--text-dim); margin-bottom: 5px; }
+  .stat-card .v{ font-size: 15px; font-weight: 700; }
+  .stat-card .v small{ display:block; font-size: 11.5px; color: var(--text-dim); font-weight:400; margin-top:2px; }
+
+  .meta-card, .deseo-card{ background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 10px; }
+  .meta-top, .deseo-top{ display:flex; align-items:center; justify-content: space-between; margin-bottom: 8px; gap: 8px; }
+  .meta-nombre, .deseo-nombre{ font-size: 14.5px; font-weight: 600; }
+  .meta-precio{ font-size: 12.5px; color: var(--text-dim); }
+  .progress-track{ height: 10px; background: var(--surface-2); border-radius: 6px; overflow:hidden; margin: 8px 0 6px; }
+  .progress-fill{ height: 100%; background: var(--mint); border-radius: 6px; transition: width .2s; }
+  .meta-bottom{ display:flex; align-items:center; justify-content: space-between; gap: 10px; }
+  .meta-ahorrado-wrap{ display:flex; align-items:center; gap: 6px; font-size: 12.5px; color: var(--text-dim); }
+  .meta-ahorrado{ width: 100px; text-align:right; }
+  .meta-pct{ font-size: 13px; font-weight: 700; color: var(--mint); }
+  .del-x{ background:none; border:none; color: var(--text-dim); font-size: 17px; padding: 0 4px; flex:none; width:auto; }
+
+  .deseo-falta{ font-size: 13px; }
+  .deseo-falta.ok{ color: var(--mint); font-weight:700; }
+  .deseo-falta.no{ color: var(--text-dim); }
+
+  .add-form-row{ display:grid; grid-template-columns: 2fr 1fr auto; gap: 8px; margin-top: 4px; }
+  .add-form-row button{ flex:none; }
+
+  .historial-item{ background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 8px; }
+  .historial-top{ display:flex; justify-content: space-between; align-items:baseline; margin-bottom: 8px; }
+  .historial-fecha{ font-size: 13px; color: var(--text-dim); }
+  .historial-ganancia{ font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .historial-ganancia.pos{ color: var(--mint); }
+  .historial-ganancia.neg{ color: var(--coral); }
+  .historial-detalle{ font-size: 12.5px; color: var(--text-dim); display:flex; gap: 12px; flex-wrap: wrap; }
+
+  .vacio{ font-size: 13px; color: var(--text-dim); text-align:center; padding: 18px 0; }
+
+  .cal-nav{ display:flex; align-items:center; justify-content:space-between; margin-bottom: 12px; }
+  .cal-nav button{ flex:none; padding: 8px 12px; }
+  .cal-nav .mes-label{ font-size: 14.5px; font-weight: 600; }
+  .calendar-grid{ display:grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-bottom: 14px; }
+  .cal-dow{ font-size: 10.5px; color: var(--text-dim); text-align:center; padding-bottom: 4px; }
+  .cal-cell{ aspect-ratio: 1; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 5px 4px; display:flex; flex-direction:column; cursor:pointer; }
+  .cal-cell.empty{ background: transparent; border-color: transparent; cursor: default; }
+  .cal-cell.selected{ border-color: var(--mint); }
+  .cal-num{ font-size: 11px; color: var(--text-dim); }
+  .cal-neto{ margin-top: auto; font-size: 10.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .cal-neto.pos{ color: var(--mint); }
+  .cal-neto.neg{ color: var(--coral); }
+  .cal-detalle{ background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+
+  .footer-note{ text-align:center; font-size: 11.5px; color: #4c5563; margin-top: 10px; }
+
+  @keyframes fadeSlideUp{ from{ opacity:0; transform: translateY(10px); } to{ opacity:1; transform: translateY(0); } }
+  .fade-in-up{ animation: fadeSlideUp .45s ease backwards; }
+
+  #seccionSemana, #seccionMes{ transition: opacity .22s ease; }
+
+  .install-banner{
+    position: fixed; left:16px; right:16px;
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 8px 12px 14px; display:flex; align-items:center; gap: 8px;
+    z-index: 300; box-shadow: 0 10px 28px rgba(0,0,0,0.45);
+    animation: fadeSlideUp .35s ease;
+  }
+  .install-banner span{ flex:1; font-size: 12.5px; color: var(--text); line-height:1.35; }
+  .install-banner button{ flex:none; width:auto; padding: 9px 14px; font-size: 12.5px; }
+
+  @media (prefers-reduced-motion: reduce){
+    .fade-in-up, .install-banner{ animation: none !important; }
+    *{ transition-duration: 0.001ms !important; }
+  }
+
+  @media (max-width: 380px){
+    .hero-amount{ font-size: 32px; }
+    .summary-card .v{ font-size: 15px; }
+    .add-mov-form{ grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="install-banner" id="installBanner" style="display:none;">
+    <span id="installBannerText"></span>
+    <button class="primary" id="btnInstalarApp" style="display:none;">Instalar</button>
+    <button class="del-x" id="btnCerrarInstall">×</button>
+  </div>
+
+  <div class="top">
+    <h1>CONTROL DE DINERO</h1>
+    <div class="mode-toggle">
+      <button id="btnModoSemana" class="active">Semana</button>
+      <button id="btnModoMes">Mes</button>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-label">Saldo actual (con lo ya realizado)</div>
+    <div class="hero-amount" id="saldoActual">$0.00</div>
+    <div class="hero-row">
+      <div class="hero-mini">
+        <div class="k">Proyección a fin de semana</div>
+        <div class="v" id="saldoProyectado">$0.00</div>
+      </div>
+      <div class="hero-mini">
+        <div class="k">Diferencia total (vs. inicio)</div>
+        <div class="v" id="diferenciaSub">$0.00</div>
+      </div>
+    </div>
+    <div class="saldo-inicial-row">
+      <label for="inputSaldoInicial">Saldo inicial de esta semana</label>
+      <input type="number" id="inputSaldoInicial" step="0.01" inputmode="decimal">
+    </div>
+  </div>
+
+  <div class="summary-grid">
+    <div class="summary-card ing"><div class="k">Ingresos</div><div class="v" id="totalIngresos">$0.00</div></div>
+    <div class="summary-card gas"><div class="k">Gastos</div><div class="v" id="totalGastos">$0.00</div></div>
+    <div class="summary-card"><div class="k">Ganancia neta</div><div class="v" id="gananciaNeta">$0.00</div></div>
+  </div>
+
+  <div class="cartera-card">
+    <div class="cartera-row">
+      <label for="inputCartera">Dinero físico en mi cartera</label>
+      <input type="number" id="inputCartera" step="0.01" inputmode="decimal">
+    </div>
+    <div class="cartera-resultado" id="carteraResultado"></div>
+  </div>
+
+  <section class="block" id="seccionSemana">
+    <div class="block-header">
+      <h2>Registro de la semana</h2>
+      <span class="hint">toca el cuadro al completar el día</span>
+    </div>
+    <div id="diasContainer"></div>
+  </section>
+
+  <section class="block" id="seccionMes" style="display:none;">
+    <div class="block-header"><h2>Vista mensual</h2></div>
+    <div class="cal-nav">
+      <button id="btnMesAnterior">‹ Anterior</button>
+      <div class="mes-label" id="mesLabel"></div>
+      <button id="btnMesSiguiente">Siguiente ›</button>
+    </div>
+    <div class="calendar-grid" id="calendarGrid"></div>
+    <div class="cal-detalle" id="calDetalle"><div class="vacio">Toca un día para ver sus movimientos.</div></div>
+  </section>
+
+  <section class="block">
+    <div class="block-header"><h2>Gráficos</h2></div>
+    <div class="chart-box"><div class="chart-title">Gastos por categoría (semana actual)</div><div id="chartGastos"></div></div>
+    <div class="chart-box"><div class="chart-title">Ingresos por categoría (semana actual)</div><div id="chartIngresos"></div></div>
+    <div class="chart-box"><div class="chart-title">Evolución del saldo durante la semana</div><svg id="chartSaldo" viewBox="0 0 320 150" style="width:100%;height:auto;"></svg></div>
+  </section>
+
+  <section class="block">
+    <div class="block-header"><h2>Estadísticas</h2></div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="k">Día con más ingresos</div><div class="v" id="statDiaIngreso">—</div></div>
+      <div class="stat-card"><div class="k">Día con más gastos</div><div class="v" id="statDiaGasto">—</div></div>
+      <div class="stat-card"><div class="k">Total ahorrado este mes</div><div class="v" id="statAhorroMes">$0.00</div></div>
+      <div class="stat-card"><div class="k">Promedio de gasto diario</div><div class="v" id="statPromedioGasto">$0.00</div></div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="block-header"><h2>Metas de ahorro</h2></div>
+    <div id="metasContainer"></div>
+    <div class="add-form-row">
+      <input type="text" id="nuevaMetaNombre" placeholder="Nombre de la meta">
+      <input type="number" id="nuevaMetaPrecio" placeholder="Precio" step="0.01">
+      <button id="btnAgregarMeta" class="primary">Agregar</button>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="block-header"><h2>¿Qué quiero comprar?</h2></div>
+    <div id="deseosContainer"></div>
+    <div class="add-form-row">
+      <input type="text" id="nuevoDeseoNombre" placeholder="Producto">
+      <input type="number" id="nuevoDeseoPrecio" placeholder="Precio" step="0.01">
+      <button id="btnAgregarDeseo" class="primary">Agregar</button>
+    </div>
+  </section>
+
+  <div class="actions-row">
+    <button id="btnReset">Reiniciar semana</button>
+    <button id="btnExportar">Exportar respaldo</button>
+    <button id="btnImportar">Importar respaldo</button>
+    <input type="file" id="inputImportar" accept="application/json">
+  </div>
+
+  <section class="block">
+    <div class="block-header"><h2>Historial de semanas</h2></div>
+    <div id="historialContainer"><div class="vacio">Todavía no hay semanas guardadas.</div></div>
+  </section>
+
+  <div class="footer-note">Tus datos se guardan solo en este dispositivo.</div>
+
+<script>
+(function(){
+  const STORAGE_KEY = 'controlDineroPersonal';
+  const NOMBRES_DIAS = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+  const CATEGORIAS = ['Transporte','Comida','Escuela','Regalo','Ahorro','Otro'];
+  const CAT_COLOR = { Transporte:'var(--blue)', Comida:'var(--amber)', Escuela:'var(--purple)', Regalo:'var(--pink)', Ahorro:'var(--mint)', Otro:'var(--text-dim)' };
+
+  function idGen(){ return 'm_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function money(n){
+    const num = Number(n) || 0;
+    const signo = num < 0 ? '-' : '';
+    return signo + '$' + Math.abs(num).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function isoDate(d){ const z = new Date(d); z.setMinutes(z.getMinutes()-z.getTimezoneOffset()); return z.toISOString().slice(0,10); }
+  function mondayOf(date){
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = (day === 0 ? -6 : 1 - day);
+    d.setDate(d.getDate() + diff);
+    d.setHours(0,0,0,0);
+    return d;
+  }
+  function crearSemana(fechaInicioDate, saldoInicial){
+    const dias = [];
+    for(let i=0;i<7;i++){
+      const d = new Date(fechaInicioDate);
+      d.setDate(d.getDate()+i);
+      dias.push({ fecha: isoDate(d), dia: NOMBRES_DIAS[i], realizado:false, movimientos: [] });
+    }
+    return { fechaInicio: isoDate(fechaInicioDate), saldoInicial: saldoInicial||0, dias };
+  }
+
+  function estadoDefault(){
+    return {
+      semana: crearSemana(mondayOf(new Date()), 460),
+      historialSemanas: [],
+      metas: [],
+      deseos: [],
+      carteraFisica: 0
+    };
+  }
+
+  function cargarEstado(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(raw){
+        const parsed = JSON.parse(raw);
+        if(parsed && parsed.semana){
+          parsed.historialSemanas = parsed.historialSemanas || [];
+          parsed.metas = parsed.metas || [];
+          parsed.deseos = parsed.deseos || [];
+          parsed.carteraFisica = parsed.carteraFisica || 0;
+          parsed.semana.dias.forEach(d => { if(!Array.isArray(d.movimientos)) d.movimientos = []; });
+          return parsed;
+        }
+      }
+    }catch(e){}
+    return estadoDefault();
+  }
+
+  let estado = cargarEstado();
+  let modo = 'semana';
+  let mesVista = new Date();
+  let fechaSeleccionada = null;
+  const draftsPorDia = {};
+
+  function draftDia(idx){
+    if(!draftsPorDia[idx]) draftsPorDia[idx] = { tipo:'gasto', monto:'', categoria:'Otro', nota:'' };
+    return draftsPorDia[idx];
+  }
+
+  function guardar(){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(estado)); }catch(e){}
+  }
+
+  function movimientosSemana(){
+    const out = [];
+    estado.semana.dias.forEach((d, idx) => {
+      d.movimientos.forEach(m => out.push(Object.assign({}, m, { diaIdx: idx, fecha: d.fecha, realizado: d.realizado })));
+    });
+    return out;
+  }
+
+  function calcularTotales(){
+    const movs = movimientosSemana();
+    let totalIngresos = 0, totalGastos = 0, ingresosRealizados = 0, gastosRealizados = 0;
+    movs.forEach(m => {
+      const monto = Number(m.monto) || 0;
+      if(m.tipo === 'ingreso'){ totalIngresos += monto; if(m.realizado) ingresosRealizados += monto; }
+      else { totalGastos += monto; if(m.realizado) gastosRealizados += monto; }
+    });
+    const gananciaNeta = totalIngresos - totalGastos;
+    const gananciaRealizada = ingresosRealizados - gastosRealizados;
+    const saldoInicial = Number(estado.semana.saldoInicial) || 0;
+    return {
+      totalIngresos, totalGastos, gananciaNeta,
+      saldoActual: saldoInicial + gananciaRealizada,
+      saldoProyectado: saldoInicial + gananciaNeta
+    };
+  }
+
+  function todosLosDias(){
+    const lista = [];
+    estado.historialSemanas.forEach(w => w.dias.forEach(d => lista.push(d)));
+    estado.semana.dias.forEach(d => lista.push(d));
+    return lista;
+  }
+
+  // ---------- RENDER: RESUMEN ----------
+  function renderResumen(){
+    const t = calcularTotales();
+    const saldoEl = document.getElementById('saldoActual');
+    saldoEl.textContent = money(t.saldoActual);
+    saldoEl.className = 'hero-amount ' + (t.saldoActual < 0 ? 'neg' : '');
+
+    document.getElementById('saldoProyectado').textContent = money(t.saldoProyectado);
+
+    const dif = t.gananciaNeta;
+    const difEl = document.getElementById('diferenciaSub');
+    difEl.textContent = (dif > 0 ? '+' : '') + money(dif);
+    difEl.style.color = dif > 0 ? 'var(--mint)' : (dif < 0 ? 'var(--coral)' : 'var(--text)');
+
+    document.getElementById('totalIngresos').textContent = money(t.totalIngresos);
+    document.getElementById('totalGastos').textContent = money(t.totalGastos);
+    const gnEl = document.getElementById('gananciaNeta');
+    gnEl.textContent = (t.gananciaNeta > 0 ? '+' : '') + money(t.gananciaNeta);
+    gnEl.style.color = t.gananciaNeta > 0 ? 'var(--mint)' : (t.gananciaNeta < 0 ? 'var(--coral)' : 'var(--text)');
+
+    document.getElementById('inputSaldoInicial').value = estado.semana.saldoInicial;
+    document.getElementById('inputCartera').value = estado.carteraFisica;
+    renderCartera(t);
+    renderCharts();
+    renderEstadisticas();
+  }
+
+  function renderCartera(t){
+    const cartera = Number(estado.carteraFisica) || 0;
+    const dif = cartera - t.saldoActual;
+    const el = document.getElementById('carteraResultado');
+    if(Math.abs(dif) < 0.01){
+      el.innerHTML = 'Coincide con el saldo calculado (' + money(t.saldoActual) + ').';
+    }else if(dif > 0){
+      el.innerHTML = 'Tienes <b>' + money(dif) + '</b> más en la cartera que en el saldo calculado.';
+    }else{
+      el.innerHTML = 'Te faltan <b>' + money(Math.abs(dif)) + '</b> respecto al saldo calculado.';
+    }
+  }
+
+  // ---------- RENDER: DIAS (modo semana) ----------
+  function categoriaOptions(sel){
+    return CATEGORIAS.map(c => '<option value="'+c+'"'+(c===sel?' selected':'')+'>'+c+'</option>').join('');
+  }
+
+  function renderDias(){
+    const cont = document.getElementById('diasContainer');
+    let html = '';
+    estado.semana.dias.forEach((dia, idx) => {
+      const neto = dia.movimientos.reduce((s,m) => s + (m.tipo==='ingreso'?Number(m.monto)||0:-(Number(m.monto)||0)), 0);
+      const draft = draftDia(idx);
+      html += '<div class="dia-card '+(dia.realizado?'done':'')+'">';
+      html += '  <div class="dia-top">';
+      html += '    <div class="check '+(dia.realizado?'on':'')+'" data-check-dia="'+idx+'"></div>';
+      html += '    <div><div class="dia-nombre">'+dia.dia+'</div><div class="dia-fecha">'+dia.fecha+'</div></div>';
+      html += '    <div class="dia-neto '+(neto>=0?'pos':'neg')+'">'+(neto>0?'+':'')+money(neto)+'</div>';
+      html += '  </div>';
+      dia.movimientos.forEach(m => {
+        html += '  <div class="mov-row">';
+        html += '    <div class="mov-dot" style="background:'+CAT_COLOR[m.categoria]+'"></div>';
+        html += '    <div class="mov-info"><div class="mov-cat">'+esc(m.categoria)+'</div>'+(m.nota?'<div class="mov-nota">'+esc(m.nota)+'</div>':'')+'</div>';
+        html += '    <div class="mov-monto '+m.tipo+'">'+(m.tipo==='ingreso'?'+':'-')+money(m.monto)+'</div>';
+        html += '    <button class="del-mov" data-del-mov="'+idx+'" data-mov-id="'+m.id+'">×</button>';
+        html += '  </div>';
+      });
+      html += '  <div class="add-mov-form">';
+      html += '    <div><span class="field-label">Tipo</span><select data-draft-tipo="'+idx+'"><option value="gasto"'+(draft.tipo==='gasto'?' selected':'')+'>Gasto</option><option value="ingreso"'+(draft.tipo==='ingreso'?' selected':'')+'>Ingreso</option></select></div>';
+      html += '    <div><span class="field-label">Categoría</span><select data-draft-categoria="'+idx+'">'+categoriaOptions(draft.categoria)+'</select></div>';
+      html += '    <div><span class="field-label">Monto</span><input type="number" step="0.01" inputmode="decimal" placeholder="0.00" data-draft-monto="'+idx+'" value="'+esc(draft.monto)+'"></div>';
+      html += '    <div><span class="field-label">Nota</span><input type="text" placeholder="¿En qué?" data-draft-nota="'+idx+'" value="'+esc(draft.nota)+'"></div>';
+      html += '    <button class="btn-add-mov" data-add-mov="'+idx+'">+ Agregar movimiento</button>';
+      html += '  </div>';
+      html += '</div>';
+    });
+    cont.innerHTML = html;
+  }
+
+  document.getElementById('diasContainer').addEventListener('click', (e) => {
+    const chk = e.target.closest('[data-check-dia]');
+    if(chk){
+      const idx = Number(chk.dataset.checkDia);
+      estado.semana.dias[idx].realizado = !estado.semana.dias[idx].realizado;
+      guardar(); renderDias(); renderResumen(); renderCalendar(); renderHistorial();
+      return;
+    }
+    const del = e.target.closest('[data-del-mov]');
+    if(del){
+      const idx = Number(del.dataset.delMov);
+      const movId = del.dataset.movId;
+      estado.semana.dias[idx].movimientos = estado.semana.dias[idx].movimientos.filter(m => m.id !== movId);
+      guardar(); renderDias(); renderResumen();
+      return;
+    }
+    const add = e.target.closest('[data-add-mov]');
+    if(add){
+      const idx = Number(add.dataset.addMov);
+      const draft = draftDia(idx);
+      const monto = parseFloat(draft.monto);
+      if(!monto || monto <= 0){ return; }
+      estado.semana.dias[idx].movimientos.push({ id: idGen(), tipo: draft.tipo, monto: monto, categoria: draft.categoria, nota: draft.nota||'' });
+      draftsPorDia[idx] = { tipo:'gasto', monto:'', categoria:'Otro', nota:'' };
+      guardar(); renderDias(); renderResumen();
+    }
+  });
+
+  document.getElementById('diasContainer').addEventListener('input', (e) => {
+    const t = e.target;
+    if(t.dataset.draftMonto !== undefined){ draftDia(Number(t.dataset.draftMonto)).monto = t.value; }
+    if(t.dataset.draftNota !== undefined){ draftDia(Number(t.dataset.draftNota)).nota = t.value; }
+  });
+  document.getElementById('diasContainer').addEventListener('change', (e) => {
+    const t = e.target;
+    if(t.dataset.draftTipo !== undefined){ draftDia(Number(t.dataset.draftTipo)).tipo = t.value; }
+    if(t.dataset.draftCategoria !== undefined){ draftDia(Number(t.dataset.draftCategoria)).categoria = t.value; }
+  });
+
+  // ---------- CHARTS ----------
+  function totalesPorCategoria(tipo){
+    const totales = {}; CATEGORIAS.forEach(c => totales[c]=0);
+    movimientosSemana().forEach(m => { if(m.tipo===tipo) totales[m.categoria] = (totales[m.categoria]||0) + (Number(m.monto)||0); });
+    return totales;
+  }
+
+  function renderBarChart(containerId, totales){
+    const cont = document.getElementById(containerId);
+    const entries = Object.entries(totales).filter(([,v]) => v > 0).sort((a,b)=>b[1]-a[1]);
+    if(entries.length === 0){ cont.innerHTML = '<div class="vacio-chart">Sin movimientos esta semana todavía.</div>'; return; }
+    const max = Math.max(...entries.map(e=>e[1]));
+    let html = '';
+    entries.forEach(([cat, val]) => {
+      const pct = Math.max(4, (val/max)*100);
+      html += '<div class="bar-row"><div class="bar-cat">'+cat+'</div><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%;background:'+CAT_COLOR[cat]+'"></div></div><div class="bar-val">'+money(val)+'</div></div>';
+    });
+    cont.innerHTML = html;
+  }
+
+  function renderLineChart(){
+    const svg = document.getElementById('chartSaldo');
+    const saldoInicial = Number(estado.semana.saldoInicial) || 0;
+    let acumulado = saldoInicial;
+    const puntos = [{ label:'Inicio', valor: acumulado }];
+    estado.semana.dias.forEach(d => {
+      const neto = d.movimientos.reduce((s,m)=> s + (m.tipo==='ingreso'?Number(m.monto)||0:-(Number(m.monto)||0)), 0);
+      acumulado += neto;
+      puntos.push({ label: d.dia.slice(0,3), valor: acumulado });
+    });
+    const w = 320, h = 150, padL = 38, padR = 10, padT = 12, padB = 20;
+    const valores = puntos.map(p=>p.valor);
+    let min = Math.min(...valores), max = Math.max(...valores);
+    if(min === max){ min -= 10; max += 10; }
+    const rango = max - min;
+    const stepX = (w - padL - padR) / (puntos.length - 1);
+    const xOf = i => padL + i*stepX;
+    const yOf = v => padT + (h - padT - padB) * (1 - (v-min)/rango);
+
+    let path = '';
+    puntos.forEach((p,i) => { path += (i===0?'M':'L') + xOf(i).toFixed(1) + ',' + yOf(p.valor).toFixed(1) + ' '; });
+
+    let svgInner = '';
+    svgInner += '<line x1="'+padL+'" y1="'+yOf(saldoInicial).toFixed(1)+'" x2="'+(w-padR)+'" y2="'+yOf(saldoInicial).toFixed(1)+'" stroke="var(--line)" stroke-dasharray="3,3" />';
+    svgInner += '<path d="'+path+'" fill="none" stroke="var(--mint)" stroke-width="2.2" />';
+    puntos.forEach((p,i) => {
+      svgInner += '<circle cx="'+xOf(i).toFixed(1)+'" cy="'+yOf(p.valor).toFixed(1)+'" r="3.2" fill="var(--mint)" />';
+      svgInner += '<text x="'+xOf(i).toFixed(1)+'" y="'+(h-4)+'" font-size="8.5" fill="var(--text-dim)" text-anchor="middle">'+p.label+'</text>';
+    });
+    svg.innerHTML = svgInner;
+  }
+
+  function renderCharts(){
+    renderBarChart('chartGastos', totalesPorCategoria('gasto'));
+    renderBarChart('chartIngresos', totalesPorCategoria('ingreso'));
+    renderLineChart();
+  }
+
+  // ---------- ESTADISTICAS ----------
+  function renderEstadisticas(){
+    let mejorIngresoDia = null, mejorIngresoVal = -1;
+    let peorGastoDia = null, peorGastoVal = -1;
+    let totalGastoSemana = 0;
+    estado.semana.dias.forEach(d => {
+      let ing = 0, gas = 0;
+      d.movimientos.forEach(m => { if(m.tipo==='ingreso') ing += Number(m.monto)||0; else gas += Number(m.monto)||0; });
+      totalGastoSemana += gas;
+      if(ing > mejorIngresoVal){ mejorIngresoVal = ing; mejorIngresoDia = d.dia; }
+      if(gas > peorGastoVal){ peorGastoVal = gas; peorGastoDia = d.dia; }
+    });
+    document.getElementById('statDiaIngreso').innerHTML = (mejorIngresoVal>0? mejorIngresoDia+'<small>'+money(mejorIngresoVal)+'</small>' : '—');
+    document.getElementById('statDiaGasto').innerHTML = (peorGastoVal>0? peorGastoDia+'<small>'+money(peorGastoVal)+'</small>' : '—');
+    document.getElementById('statPromedioGasto').textContent = money(totalGastoSemana / 7);
+
+    const hoy = new Date();
+    const mes = hoy.getMonth(), anio = hoy.getFullYear();
+    let ahorroMes = 0;
+    todosLosDias().forEach(d => {
+      const fd = new Date(d.fecha+'T00:00:00');
+      if(fd.getMonth()===mes && fd.getFullYear()===anio){
+        d.movimientos.forEach(m => { if(m.categoria === 'Ahorro') ahorroMes += Number(m.monto)||0; });
+      }
+    });
+    document.getElementById('statAhorroMes').textContent = money(ahorroMes);
+  }
+
+  // ---------- METAS ----------
+  function renderMetas(){
+    const cont = document.getElementById('metasContainer');
+    if(estado.metas.length === 0){ cont.innerHTML = '<div class="vacio">Todavía no tienes metas de ahorro.</div>'; return; }
+    let html = '';
+    estado.metas.forEach(meta => {
+      const pct = meta.precioObjetivo > 0 ? Math.min(100, (meta.ahorrado/meta.precioObjetivo)*100) : 0;
+      html += '<div class="meta-card">';
+      html += '  <div class="meta-top"><div><div class="meta-nombre">'+esc(meta.nombre)+'</div><div class="meta-precio">Meta: '+money(meta.precioObjetivo)+'</div></div><button class="del-x" data-del-meta="'+meta.id+'">×</button></div>';
+      html += '  <div class="progress-track"><div class="progress-fill" style="width:'+pct.toFixed(1)+'%"></div></div>';
+      html += '  <div class="meta-bottom"><div class="meta-ahorrado-wrap">Ahorrado: <input type="number" step="0.01" class="meta-ahorrado" data-meta-ahorrado="'+meta.id+'" value="'+meta.ahorrado+'"></div><div class="meta-pct">'+pct.toFixed(0)+'%</div></div>';
+      html += '</div>';
+    });
+    cont.innerHTML = html;
+  }
+
+  document.getElementById('btnAgregarMeta').addEventListener('click', () => {
+    const nombre = document.getElementById('nuevaMetaNombre').value.trim();
+    const precio = parseFloat(document.getElementById('nuevaMetaPrecio').value);
+    if(!nombre || !precio || precio <= 0) return;
+    estado.metas.push({ id: idGen(), nombre, precioObjetivo: precio, ahorrado: 0 });
+    document.getElementById('nuevaMetaNombre').value = '';
+    document.getElementById('nuevaMetaPrecio').value = '';
+    guardar(); renderMetas();
+  });
+
+  document.getElementById('metasContainer').addEventListener('click', (e) => {
+    const del = e.target.closest('[data-del-meta]');
+    if(del){ estado.metas = estado.metas.filter(m => m.id !== del.dataset.delMeta); guardar(); renderMetas(); }
+  });
+  document.getElementById('metasContainer').addEventListener('input', (e) => {
+    const t = e.target;
+    if(t.dataset.metaAhorrado !== undefined){
+      const meta = estado.metas.find(m => m.id === t.dataset.metaAhorrado);
+      if(meta){
+        meta.ahorrado = parseFloat(t.value) || 0;
+        guardar();
+        const card = t.closest('.meta-card');
+        const pct = meta.precioObjetivo > 0 ? Math.min(100, (meta.ahorrado/meta.precioObjetivo)*100) : 0;
+        card.querySelector('.progress-fill').style.width = pct.toFixed(1)+'%';
+        card.querySelector('.meta-pct').textContent = pct.toFixed(0)+'%';
+      }
+    }
+  });
+
+  // ---------- DESEOS ----------
+  function renderDeseos(){
+    const cont = document.getElementById('deseosContainer');
+    if(estado.deseos.length === 0){ cont.innerHTML = '<div class="vacio">Todavía no registras nada que quieras comprar.</div>'; return; }
+    const t = calcularTotales();
+    let html = '';
+    estado.deseos.forEach(deseo => {
+      const falta = deseo.precio - t.saldoActual;
+      html += '<div class="deseo-card">';
+      html += '  <div class="deseo-top"><div><div class="deseo-nombre">'+esc(deseo.nombre)+'</div><div class="meta-precio">Precio: '+money(deseo.precio)+'</div></div><button class="del-x" data-del-deseo="'+deseo.id+'">×</button></div>';
+      if(falta <= 0){ html += '  <div class="deseo-falta ok">¡Ya te alcanza para comprarlo!</div>'; }
+      else{ html += '  <div class="deseo-falta no">Te faltan '+money(falta)+'</div>'; }
+      html += '</div>';
+    });
+    cont.innerHTML = html;
+  }
+
+  document.getElementById('btnAgregarDeseo').addEventListener('click', () => {
+    const nombre = document.getElementById('nuevoDeseoNombre').value.trim();
+    const precio = parseFloat(document.getElementById('nuevoDeseoPrecio').value);
+    if(!nombre || !precio || precio <= 0) return;
+    estado.deseos.push({ id: idGen(), nombre, precio });
+    document.getElementById('nuevoDeseoNombre').value = '';
+    document.getElementById('nuevoDeseoPrecio').value = '';
+    guardar(); renderDeseos();
+  });
+  document.getElementById('deseosContainer').addEventListener('click', (e) => {
+    const del = e.target.closest('[data-del-deseo]');
+    if(del){ estado.deseos = estado.deseos.filter(d => d.id !== del.dataset.delDeseo); guardar(); renderDeseos(); }
+  });
+
+  // ---------- HISTORIAL ----------
+  function renderHistorial(){
+    const cont = document.getElementById('historialContainer');
+    if(estado.historialSemanas.length === 0){ cont.innerHTML = '<div class="vacio">Todavía no hay semanas guardadas.</div>'; return; }
+    let html = '';
+    [...estado.historialSemanas].reverse().forEach(item => {
+      html += '<div class="historial-item">';
+      html += '  <div class="historial-top"><div class="historial-fecha">'+item.fechaGuardado+'</div><div class="historial-ganancia '+(item.gananciaNeta>=0?'pos':'neg')+'">'+(item.gananciaNeta>0?'+':'')+money(item.gananciaNeta)+'</div></div>';
+      html += '  <div class="historial-detalle"><span>Inicio: '+money(item.saldoInicial)+'</span><span>Final: '+money(item.saldoFinal)+'</span><span>Ingresos: '+money(item.totalIngresos)+'</span><span>Gastos: '+money(item.totalGastos)+'</span></div>';
+      html += '</div>';
+    });
+    cont.innerHTML = html;
+  }
+
+  // ---------- MODO / CALENDARIO ----------
+  function setModo(nuevo){
+    if(nuevo === modo) return;
+    modo = nuevo;
+    document.getElementById('btnModoSemana').classList.toggle('active', modo==='semana');
+    document.getElementById('btnModoMes').classList.toggle('active', modo==='mes');
+
+    const secSemana = document.getElementById('seccionSemana');
+    const secMes = document.getElementById('seccionMes');
+    const elMostrar = modo==='semana' ? secSemana : secMes;
+    const elOcultar = modo==='semana' ? secMes : secSemana;
+
+    elOcultar.style.opacity = '0';
+    setTimeout(() => {
+      elOcultar.style.display = 'none';
+      elMostrar.style.display = '';
+      elMostrar.style.opacity = '0';
+      if(modo==='mes') renderCalendar();
+      requestAnimationFrame(() => { elMostrar.style.opacity = '1'; });
+    }, 180);
+  }
+  document.getElementById('btnModoSemana').addEventListener('click', () => setModo('semana'));
+  document.getElementById('btnModoMes').addEventListener('click', () => setModo('mes'));
+
+  function indiceDeDias(){
+    const idx = {};
+    todosLosDias().forEach(d => { idx[d.fecha] = d; });
+    return idx;
+  }
+
+  function renderCalendar(){
+    const label = mesVista.toLocaleDateString('es-MX', { month:'long', year:'numeric' });
+    document.getElementById('mesLabel').textContent = label.charAt(0).toUpperCase()+label.slice(1);
+
+    const year = mesVista.getFullYear(), month = mesVista.getMonth();
+    const primerDia = new Date(year, month, 1);
+    const diasEnMes = new Date(year, month+1, 0).getDate();
+    let offset = primerDia.getDay(); offset = offset===0 ? 6 : offset-1;
+
+    const idx = indiceDeDias();
+    const dow = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+    let html = dow.map(d => '<div class="cal-dow">'+d+'</div>').join('');
+
+    for(let i=0;i<offset;i++) html += '<div class="cal-cell empty"></div>';
+    for(let day=1; day<=diasEnMes; day++){
+      const fecha = isoDate(new Date(year, month, day));
+      const registro = idx[fecha];
+      let neto = 0;
+      if(registro) registro.movimientos.forEach(m => { neto += m.tipo==='ingreso' ? Number(m.monto)||0 : -(Number(m.monto)||0); });
+      const sel = fecha === fechaSeleccionada ? ' selected' : '';
+      html += '<div class="cal-cell'+sel+'" data-cal-fecha="'+fecha+'"><div class="cal-num">'+day+'</div>'+(registro && registro.movimientos.length>0 ? '<div class="cal-neto '+(neto>=0?'pos':'neg')+'">'+(neto>0?'+':'')+money(neto)+'</div>' : '')+'</div>';
+    }
+    document.getElementById('calendarGrid').innerHTML = html;
+    renderCalDetalle();
+    renderMonthlyTotalsIfAny();
+  }
+
+  function renderMonthlyTotalsIfAny(){ /* month totals shown via estadísticas card already */ }
+
+  function renderCalDetalle(){
+    const cont = document.getElementById('calDetalle');
+    if(!fechaSeleccionada){ cont.innerHTML = '<div class="vacio">Toca un día para ver sus movimientos.</div>'; return; }
+    const idx = indiceDeDias();
+    const registro = idx[fechaSeleccionada];
+    if(!registro || registro.movimientos.length===0){ cont.innerHTML = '<div class="vacio">Sin movimientos registrados el '+fechaSeleccionada+'.</div>'; return; }
+    let html = '<div class="dia-fecha" style="margin-bottom:8px;">'+registro.dia+' · '+fechaSeleccionada+'</div>';
+    registro.movimientos.forEach(m => {
+      html += '<div class="mov-row"><div class="mov-dot" style="background:'+CAT_COLOR[m.categoria]+'"></div><div class="mov-info"><div class="mov-cat">'+esc(m.categoria)+'</div>'+(m.nota?'<div class="mov-nota">'+esc(m.nota)+'</div>':'')+'</div><div class="mov-monto '+m.tipo+'">'+(m.tipo==='ingreso'?'+':'-')+money(m.monto)+'</div></div>';
+    });
+    cont.innerHTML = html;
+  }
+
+  document.getElementById('calendarGrid').addEventListener('click', (e) => {
+    const cell = e.target.closest('[data-cal-fecha]');
+    if(!cell) return;
+    fechaSeleccionada = cell.dataset.calFecha;
+    renderCalendar();
+  });
+  document.getElementById('btnMesAnterior').addEventListener('click', () => { mesVista.setMonth(mesVista.getMonth()-1); renderCalendar(); });
+  document.getElementById('btnMesSiguiente').addEventListener('click', () => { mesVista.setMonth(mesVista.getMonth()+1); renderCalendar(); });
+
+  // ---------- INPUTS GLOBALES ----------
+  document.getElementById('inputSaldoInicial').addEventListener('input', (e) => {
+    estado.semana.saldoInicial = parseFloat(e.target.value) || 0;
+    guardar(); renderResumen(); renderCalendar();
+  });
+  document.getElementById('inputCartera').addEventListener('input', (e) => {
+    estado.carteraFisica = parseFloat(e.target.value) || 0;
+    guardar();
+    renderCartera(calcularTotales());
+  });
+
+  // ---------- RESET SEMANA ----------
+  document.getElementById('btnReset').addEventListener('click', () => {
+    const ok = confirm('¿Reiniciar la semana? Se guardará el resumen actual en el historial y se creará una semana nueva.');
+    if(!ok) return;
+    const t = calcularTotales();
+    const hoy = new Date();
+    estado.historialSemanas.push({
+      fechaGuardado: hoy.toLocaleDateString('es-MX', { day:'numeric', month:'long', year:'numeric' }),
+      saldoInicial: estado.semana.saldoInicial,
+      saldoFinal: t.saldoProyectado,
+      totalIngresos: t.totalIngresos,
+      totalGastos: t.totalGastos,
+      gananciaNeta: t.gananciaNeta,
+      dias: estado.semana.dias
+    });
+    const nuevaFechaInicio = new Date(estado.semana.fechaInicio+'T00:00:00');
+    nuevaFechaInicio.setDate(nuevaFechaInicio.getDate()+7);
+    estado.semana = crearSemana(nuevaFechaInicio, t.saldoProyectado);
+    for(const k in draftsPorDia) delete draftsPorDia[k];
+    guardar();
+    renderAll();
+  });
+
+  // ---------- EXPORTAR / IMPORTAR ----------
+  document.getElementById('btnExportar').addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(estado, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const fecha = isoDate(new Date());
+    a.href = url;
+    a.download = 'control-dinero-respaldo-' + fecha + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById('btnImportar').addEventListener('click', () => {
+    document.getElementById('inputImportar').click();
+  });
+  document.getElementById('inputImportar').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try{
+        const parsed = JSON.parse(reader.result);
+        if(!parsed || !parsed.semana || !Array.isArray(parsed.semana.dias)) throw new Error('formato inválido');
+        const ok = confirm('¿Reemplazar todos los datos actuales con este respaldo?');
+        if(!ok) return;
+        parsed.historialSemanas = parsed.historialSemanas || [];
+        parsed.metas = parsed.metas || [];
+        parsed.deseos = parsed.deseos || [];
+        parsed.carteraFisica = parsed.carteraFisica || 0;
+        estado = parsed;
+        for(const k in draftsPorDia) delete draftsPorDia[k];
+        guardar();
+        renderAll();
+      }catch(err){
+        alert('El archivo no es un respaldo válido de esta app.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  });
+
+  function renderAll(){
+    renderDias();
+    renderResumen();
+    renderMetas();
+    renderDeseos();
+    renderHistorial();
+    if(modo==='mes') renderCalendar();
+  }
+
+  renderAll();
+
+  // Animación de entrada suave, una sola vez al cargar
+  const bloquesAnimados = document.querySelectorAll('body > .hero, body > .summary-grid, body > .cartera-card, body > section.block, body > .actions-row, body > .footer-note');
+  bloquesAnimados.forEach((el, i) => {
+    el.style.animationDelay = (i * 0.035) + 's';
+    el.classList.add('fade-in-up');
+  });
+})();
+</script>
+
+<script>
+  // ---------- PWA: registro del service worker ----------
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+
+  // ---------- PWA: banner de instalación ----------
+  function esIOS(){ return /iphone|ipad|ipod/i.test(navigator.userAgent); }
+  function esStandalone(){
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  }
+
+  let deferredInstallPrompt = null;
+  const installBanner = document.getElementById('installBanner');
+  const installBannerText = document.getElementById('installBannerText');
+  const btnInstalarApp = document.getElementById('btnInstalarApp');
+  const btnCerrarInstall = document.getElementById('btnCerrarInstall');
+
+  function mostrarBannerInstalacion(texto, conBoton){
+    if(esStandalone()) return;
+    if(localStorage.getItem('installBannerCerrado')) return;
+    installBannerText.textContent = texto;
+    btnInstalarApp.style.display = conBoton ? '' : 'none';
+    installBanner.style.display = 'flex';
+  }
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    mostrarBannerInstalacion('Instala esta app en tu pantalla de inicio para usarla sin conexión, como una app normal.', true);
+  });
+
+  if(esIOS() && !esStandalone()){
+    mostrarBannerInstalacion('Para instalar: toca el botón de compartir de Safari y elige "Agregar a pantalla de inicio".', false);
+  }
+
+  btnInstalarApp.addEventListener('click', async () => {
+    if(!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    installBanner.style.display = 'none';
+  });
+
+  btnCerrarInstall.addEventListener('click', () => {
+    installBanner.style.display = 'none';
+    localStorage.setItem('installBannerCerrado', '1');
+  });
+</script>
+
+</body>
+</html>
